@@ -1,0 +1,48 @@
+groups:
+  - name: netdata-rules
+    rules:
+      - alert: node_high_cpu_usage_70
+        expr: 100 / sum(netdata_cpu_cpu_percentage_average) by (exported_instance) * sum(netdata_cpu_cpu_percentage_average{dimension!="idle"}) by (exported_instance) > 70
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          description: "VALUE = '{{ $labels.job }} on ''{{ $labels.job }}'' CPU usage is at {{ humanize $value }}%.'"
+          summary: CPU alert for node '{{ $labels.job }}'
+
+      - alert: node_high_system_load_usage_30
+        expr: netdata_system_load_load_average{dimension="load1"} > 30
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          description: '{{ $labels.job }} on ''{{ $labels.exported_instance }}'' CPU usage is at {{ humanize $value }}%.'
+          summary: Load average alert for node '{{ $labels.exported_instance }}'
+
+      - alert: node_root_filesystem_fill_rate_6h
+        expr: predict_linear(netdata_disk_space_GiB_average{family="/",dimension=~"avail|cached"}[1h], 6 * 3600) < 0
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          description: Node {{ $labels.exported_instance }} root filesystem is going to fill up in 6h.
+          summary: Disk fill alert for Swarm node '{{ $labels.exported_instance }}'
+
+      - alert: node_cpu_steal_noisy_neighbor
+        expr: rate(netdata_cpu_cpu_percentage_average{dimension="steal"}[1m]) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          description: CPU steal is > 10%. A noisy neighbor is killing VM performances or a spot instance may be out of credit.\n  VALUE = {{ $value }}\n  LABELS {{ $labels }}
+          summary: Node CPU steal noisy neighbor (instance {{ $labels.exported_instance }})
+
+      - alert: node_high_Memory_usage
+        expr: 100 / netdata_system_ram_MiB_average * netdata_system_ram_MiB_average{dimension=~"free|cached"} < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Netdata high memory usage (instance {{ $labels.exported_instance }})
+          description: Netdata high memory usage (> 80%)\n  VALUE = {{ $value }}\n  LABELS {{ $labels }}
+
