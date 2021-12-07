@@ -19,15 +19,6 @@ groups:
           description: '{{ $labels.job }} on ''{{ $labels.exported_instance }}'' CPU usage is at {{ humanize $value }}%.'
           summary: Load average alert for node '{{ $labels.exported_instance }}'
 
-      - alert: node_root_filesystem_fill_rate_6h
-        expr: predict_linear(netdata_disk_space_GiB_average{family="/",dimension=~"avail|cached"}[1h], 6 * 3600) < 0
-        for: 1h
-        labels:
-          severity: critical
-        annotations:
-          description: Node {{ $labels.exported_instance }} root filesystem is going to fill up in 6h.
-          summary: Disk fill alert for Swarm node '{{ $labels.exported_instance }}'
-
       - alert: node_cpu_steal_noisy_neighbor
         expr: rate(netdata_cpu_cpu_percentage_average{dimension="steal"}[1m]) > 10
         for: 10m
@@ -37,12 +28,78 @@ groups:
           description: CPU steal is > 10%. A noisy neighbor is killing VM performances or a spot instance may be out of credit.\n  VALUE = {{ $value }}\n  LABELS {{ $labels }}
           summary: Node CPU steal noisy neighbor (instance {{ $labels.exported_instance }})
 
-      - alert: node_high_Memory_usage
-        expr: 100 / netdata_system_ram_MiB_average * netdata_system_ram_MiB_average{dimension=~"free|cached"} < 20
+      - alert: node_root_filesystem_fill_rate_6h
+        expr: predict_linear(netdata_disk_space_GiB_average{family="/",dimension=~"avail|cached"}[1h], 6 * 3600) < 0
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          description: Node {{ $labels.exported_instance }} root filesystem is going to fill up in 6h.
+          summary: Disk fill alert for Swarm node '{{ $labels.exported_instance }}'
+
+      - alert: node_medium_memory_usage
+        expr: 100 / sum(netdata_system_ram_MiB_average) by (exported_instance) * sum(netdata_system_ram_MiB_average{dimension=~"free|cached"}) by (exported_instance) < 20
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: System high memory usage (instance {{ $labels.exported_instance }})
+          description: System high memory usage (< 20%)\n  VALUE = {{ $value }}\n  LABELS {{ $labels }}
+
+      - alert: node_high_memory_usage
+        expr: 100 / sum(netdata_system_ram_MiB_average) by (exported_instance) * sum(netdata_system_ram_MiB_average{dimension=~"free|cached"}) by (exported_instance) < 5
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: System high memory usage (instance {{ $labels.exported_instance }})
+          description: System high memory usage (< 20%)\n  VALUE = {{ $value }}\n  LABELS {{ $labels }}
+
+      - alert: node_low_disk_space
+        expr: 100 / sum(netdata_disk_space_GiB_average) by (exported_instance) * sum(netdata_disk_space_GiB_average{dimension=~"avail|cached"}) by (exported_instance) < 20
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: System low disk space (instance {{ $labels.exported_instance }})
+          description: "Netdata low disk space (> 80%)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+      - alert: node_total_processes_active
+        expr: sum (netdata_apps_processes_processes_average) by (exported_instance) > 1500
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: Total system processes active is critical (instance {{ $labels.exported_instance }})
+          description: "Total system processes active is (>1500)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  - name: prometheus-rules
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: Netdata high memory usage (instance {{ $labels.exported_instance }})
-          description: Netdata high memory usage (> 80%)\n  VALUE = {{ $value }}\n  LABELS {{ $labels }}
+          summary: "Instance {{ $labels.instance }} down"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 5 minutes."
 
+  - name: alertmanager-rules
+    rules:
+      - alert: alertmanager_config_last_reload_unsuccessful
+        expr: alertmanager_config_last_reload_successful == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Instance {{ $labels.instance }} alertmanager a failed configuration reload"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has had a failed configuration reload for more than 5 minutes."
+
+      - alert: PrometheusAlertmanagerE2eDeadManSwitch
+        expr: vector(1)
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Prometheus AlertManager E2E dead man switch (instance {{ $labels.instance }})
+          description: "Prometheus DeadManSwitch is an always-firing alert. It's used as an end-to-end test of Prometheus through the Alertmanager.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
