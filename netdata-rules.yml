@@ -87,10 +87,10 @@ groups:
   - name: alertmanager-rules
     rules:
       - alert: alertmanager_config_last_reload_unsuccessful
-        expr: alertmanager_config_last_reload_successful == 1
+        expr: alertmanager_config_last_reload_successful == 0
         for: 5m
         labels:
-          severity: warning
+          severity: critical
         annotations:
           summary: "Instance {{ $labels.instance }} alertmanager a failed configuration reload"
           description: "{{ $labels.instance }} of job {{ $labels.job }} has had a failed configuration reload for more than 5 minutes."
